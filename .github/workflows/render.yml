@@ -1,0 +1,56 @@
+name: Render carousel
+
+on:
+  push:
+    branches: [main]
+    paths: ['20*/build.py']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install fonts and Playwright
+        run: |
+          npm i --prefix "$RUNNER_TEMP/f" @fontsource/gfs-didot @fontsource/inter @fontsource/bebas-neue @fontsource/montserrat @fontsource/poppins @fontsource/dm-sans @fontsource/archivo-black @fontsource/space-grotesk
+          pip install playwright pillow
+          playwright install --with-deps chromium
+
+      - name: Render carousel PNG
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            files=$(ls 20*/build.py)
+          else
+            files=$(git diff --name-only HEAD~1 HEAD -- '20*/build.py')
+          fi
+          for f in $files; do
+            echo "Render $f"
+            FONTS_DIR="$RUNNER_TEMP/f/node_modules/@fontsource" python "$f"
+          done
+
+      - name: Commit PNG
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan"
+          else
+            git commit -m "Render carousel PNG"
+            git push
+          fi
